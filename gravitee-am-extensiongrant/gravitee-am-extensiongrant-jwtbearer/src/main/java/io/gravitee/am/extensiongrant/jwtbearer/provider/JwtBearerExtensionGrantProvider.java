@@ -24,6 +24,7 @@ import io.gravitee.am.repository.oauth2.model.request.TokenRequest;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.SignatureException;
 import io.reactivex.Maybe;
+import io.reactivex.Observable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -36,8 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
-import java.util.Arrays;
-import java.util.Base64;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,22 +63,43 @@ public class JwtBearerExtensionGrantProvider implements ExtensionGrantProvider, 
 
     @Override
     public Maybe<User> grant(TokenRequest tokenRequest) throws InvalidGrantException {
-        try {
-            String assertion = tokenRequest.getRequestParameters().get(ASSERTION_QUERY_PARAM);
+        String assertion = tokenRequest.getRequestParameters().get(ASSERTION_QUERY_PARAM);
 
-            if (assertion == null) {
-                throw new InvalidGrantException("Assertion value is missing");
-            }
-            Jws<Claims> jwsClaims = jwtParser.parseClaimsJws(assertion);
-            Claims claims = jwsClaims.getBody();
-            return Maybe.just(new DefaultUser(claims.getSubject()));
-        } catch (ExpiredJwtException | UnsupportedJwtException | MalformedJwtException | SignatureException | IllegalArgumentException e) {
-            LOGGER.debug(e.getMessage(),e.getCause());
-            return Maybe.error(new InvalidGrantException(e.getMessage(), e));
-        } catch (Exception e) {
-            LOGGER.error(e.getMessage(),e.getCause());
-            return Maybe.error(new InvalidGrantException(e.getMessage(), e));
+        if (assertion == null) {
+            throw new InvalidGrantException("Assertion value is missing");
         }
+
+        return Observable.fromCallable(() -> {
+            try {
+                Jws<Claims> jwsClaims = jwtParser.parseClaimsJws(assertion);
+                Claims claims = jwsClaims.getBody();
+                return createUser(claims);
+            } catch (ExpiredJwtException | UnsupportedJwtException | MalformedJwtException | SignatureException | IllegalArgumentException e) {
+                LOGGER.debug(e.getMessage(),e.getCause());
+                throw new InvalidGrantException(e.getMessage(), e);
+            } catch (Exception e) {
+                LOGGER.error(e.getMessage(),e.getCause());
+                throw new InvalidGrantException(e.getMessage(), e);
+            }
+        }).firstElement();
+    }
+
+    private User createUser(Claims claims) {
+        User user = new DefaultUser(claims.getSubject());
+        // set claims
+        Map<String, Object> additionalInformation = new HashMap<>();
+        // add sub required claim
+        additionalInformation.put(io.gravitee.am.common.jwt.Claims.sub, claims.getSubject());
+        List<Map<String, String>> claimsMapper = jwtBearerTokenGranterConfiguration.getClaimsMapper();
+        if (claimsMapper != null && !claimsMapper.isEmpty()) {
+            claimsMapper.forEach(claimMapper -> claimMapper.forEach((assertionClaim, tokenClaim) -> {
+                if (claims.containsKey(assertionClaim)) {
+                    additionalInformation.put(tokenClaim, claims.get(assertionClaim));
+                }
+            }));
+        }
+        ((DefaultUser) user).setAdditonalInformation(additionalInformation);
+        return user;
     }
 
     /**
