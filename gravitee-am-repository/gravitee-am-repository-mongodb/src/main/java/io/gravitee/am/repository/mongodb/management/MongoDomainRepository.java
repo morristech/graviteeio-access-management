@@ -22,10 +22,12 @@ import io.gravitee.am.model.common.event.Event;
 import io.gravitee.am.model.common.event.Payload;
 import io.gravitee.am.model.common.event.Type;
 import io.gravitee.am.model.login.LoginForm;
+import io.gravitee.am.model.scim.SCIMSettings;
 import io.gravitee.am.repository.management.api.DomainRepository;
 import io.gravitee.am.repository.mongodb.common.IdGenerator;
 import io.gravitee.am.repository.mongodb.management.internal.model.DomainMongo;
 import io.gravitee.am.repository.mongodb.management.internal.model.LoginFormMongo;
+import io.gravitee.am.repository.mongodb.management.internal.model.SCIMSettingsMongo;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
 import io.reactivex.Observable;
@@ -112,6 +114,7 @@ public class MongoDomainRepository extends AbstractManagementMongoRepository imp
         domain.setLoginForm(convert(domainMongo.getLoginForm()));
         domain.setIdentities(domainMongo.getIdentities());
         domain.setOauth2Identities(domainMongo.getOauth2Identities());
+        domain.setScim(convert(domainMongo.getScim()));
 
         // set last event
         Document document = domainMongo.getLastEvent();
@@ -138,6 +141,7 @@ public class MongoDomainRepository extends AbstractManagementMongoRepository imp
         domainMongo.setLoginForm(convert(domain.getLoginForm()));
         domainMongo.setIdentities(domain.getIdentities());
         domainMongo.setOauth2Identities(domain.getOauth2Identities());
+        domainMongo.setScim(convert(domain.getScim()));
 
         // save last event
         Event event = domain.getLastEvent();
@@ -188,5 +192,25 @@ public class MongoDomainRepository extends AbstractManagementMongoRepository imp
         document.put("content", payload);
 
         return document;
+    }
+
+    private SCIMSettings convert(SCIMSettingsMongo scimMongo) {
+        if (scimMongo == null) {
+            return null;
+        }
+
+        SCIMSettings scimSettings = new SCIMSettings();
+        scimSettings.setEnabled(scimMongo.isEnabled());
+        return scimSettings;
+    }
+
+    private SCIMSettingsMongo convert(SCIMSettings scim) {
+        if (scim == null) {
+            return null;
+        }
+
+        SCIMSettingsMongo scimMongo = new SCIMSettingsMongo();
+        scimMongo.setEnabled(scim.isEnabled());
+        return scimMongo;
     }
 }

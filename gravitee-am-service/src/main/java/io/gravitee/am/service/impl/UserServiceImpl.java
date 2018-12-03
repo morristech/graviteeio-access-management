@@ -19,10 +19,9 @@ import io.gravitee.am.model.User;
 import io.gravitee.am.model.common.Page;
 import io.gravitee.am.repository.management.api.UserRepository;
 import io.gravitee.am.service.UserService;
-import io.gravitee.am.service.authentication.crypto.password.PasswordEncoder;
-import io.gravitee.am.service.authentication.crypto.password.bcrypt.BCryptPasswordEncoder;
 import io.gravitee.am.service.exception.AbstractManagementException;
 import io.gravitee.am.service.exception.TechnicalManagementException;
+import io.gravitee.am.service.exception.UserAlreadyExistsException;
 import io.gravitee.am.service.exception.UserNotFoundException;
 import io.gravitee.am.service.model.NewUser;
 import io.gravitee.am.service.model.UpdateUser;
@@ -36,6 +35,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -46,23 +46,18 @@ import java.util.Set;
 @Component
 public class UserServiceImpl implements UserService {
 
-    /**
-     * Logger.
-     */
     private final Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
 
     @Autowired
     private UserRepository userRepository;
-
-    private PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
     public Single<Set<User>> findByDomain(String domain) {
         LOGGER.debug("Find users by domain: {}", domain);
         return userRepository.findByDomain(domain)
                 .onErrorResumeNext(ex -> {
-                    LOGGER.error("An error occurs while trying to find users by domain", ex);
-                    return Single.error(new TechnicalManagementException("An error occurs while trying to find users by domain", ex));
+                    LOGGER.error("An error occurs while trying to find users by domain {}", domain, ex);
+                    return Single.error(new TechnicalManagementException(String.format("An error occurs while trying to find users by domain %s", domain), ex));
                 });
     }
 
@@ -71,8 +66,29 @@ public class UserServiceImpl implements UserService {
         LOGGER.debug("Find users by domain: {}", domain);
         return userRepository.findByDomain(domain, page, size)
                 .onErrorResumeNext(ex -> {
-                    LOGGER.error("An error occurs while trying to find users by domain", ex);
-                    return Single.error(new TechnicalManagementException("An error occurs while trying to find users by domain", ex));
+                    LOGGER.error("An error occurs while trying to find users by domain {}", domain, ex);
+                    return Single.error(new TechnicalManagementException(String.format("An error occurs while trying to find users by domain %s", domain), ex));
+                });
+    }
+
+    @Override
+    public Single<Page<User>> search(String domain, String query, int limit) {
+        LOGGER.debug("Search users for domain {} with query {}", domain, query);
+        return userRepository.search(domain, query, limit)
+                .onErrorResumeNext(ex -> {
+                    LOGGER.error("An error occurs while trying to search users for domain {} and query {}", domain, query, ex);
+                    return Single.error(new TechnicalManagementException(String.format("An error occurs while trying to find users for domain %s and query %s", domain, query), ex));
+                });
+    }
+
+    @Override
+    public Single<List<User>> findByIdIn(List<String> ids) {
+        String userIds = String.join(",", ids);
+        LOGGER.debug("Find users by ids: {}", userIds);
+        return userRepository.findByIdIn(ids)
+                .onErrorResumeNext(ex -> {
+                    LOGGER.error("An error occurs while trying to find users by ids {}", userIds, ex);
+                    return Single.error(new TechnicalManagementException(String.format("An error occurs while trying to find users by ids %s", userIds), ex));
                 });
     }
 
@@ -81,7 +97,7 @@ public class UserServiceImpl implements UserService {
         LOGGER.debug("Find user by id : {}", id);
         return userRepository.findById(id)
                 .onErrorResumeNext(ex -> {
-                    LOGGER.error("An error occurs while trying to find a user using its ID", id, ex);
+                    LOGGER.error("An error occurs while trying to find a user using its ID {}", id, ex);
                     return Maybe.error(new TechnicalManagementException(
                             String.format("An error occurs while trying to find a user using its ID: %s", id), ex));
                 });
@@ -89,7 +105,7 @@ public class UserServiceImpl implements UserService {
 
 
     @Override
-    public Maybe<User> loadUserByUsernameAndDomain(String domain, String username) {
+    public Maybe<User> findByDomainAndUsername(String domain, String username) {
         LOGGER.debug("Find user by username and domain: {} {}", username, domain);
         return userRepository.findByUsernameAndDomain(domain, username)
                 .onErrorResumeNext(ex -> {
@@ -103,31 +119,39 @@ public class UserServiceImpl implements UserService {
     public Single<User> create(String domain, NewUser newUser) {
         LOGGER.debug("Create a new user {} for domain {}", newUser, domain);
 
-        String userId = UUID.toString(UUID.random());
+        return userRepository.findByDomainAndUsernameAndSource(domain, newUser.getUsername(), newUser.getSource())
+                .isEmpty()
+                .flatMap(isEmpty -> {
+                    if (!isEmpty) {
+                        return Single.error(new UserAlreadyExistsException(newUser.getUsername()));
+                    } else {
+                        String userId = UUID.toString(UUID.random());
 
-        User user = new User();
-        user.setId(userId);
-        user.setDomain(domain);
-        user.setUsername(newUser.getUsername());
-
-        if (newUser.getPassword() != null) {
-            user.setPassword(passwordEncoder.encode(newUser.getPassword()));
-        }
-
-        user.setFirstName(newUser.getFirstName());
-        user.setLastName(newUser.getLastName());
-        user.setEmail(newUser.getEmail());
-        user.setSource(newUser.getSource());
-        user.setClient(newUser.getClient());
-        user.setLoggedAt(newUser.getLoggedAt());
-        user.setLoginsCount(newUser.getLoginsCount());
-        user.setAdditionalInformation(newUser.getAdditionalInformation());
-        user.setCreatedAt(new Date());
-        user.setUpdatedAt(user.getCreatedAt());
-        return userRepository.create(user)
+                        User user = new User();
+                        user.setId(userId);
+                        user.setExternalId(newUser.getExternalId());
+                        user.setDomain(domain);
+                        user.setUsername(newUser.getUsername());
+                        user.setFirstName(newUser.getFirstName());
+                        user.setLastName(newUser.getLastName());
+                        user.setEmail(newUser.getEmail());
+                        user.setSource(newUser.getSource());
+                        user.setInternal(true);
+                        user.setPreRegistration(newUser.isPreRegistration());
+                        user.setRegistrationCompleted(newUser.isRegistrationCompleted());
+                        user.setAdditionalInformation(newUser.getAdditionalInformation());
+                        user.setCreatedAt(new Date());
+                        user.setUpdatedAt(user.getCreatedAt());
+                        return userRepository.create(user);
+                    }
+                })
                 .onErrorResumeNext(ex -> {
-                    LOGGER.error("An error occurs while trying to create a user", ex);
-                    return Single.error(new TechnicalManagementException("An error occurs while trying to create a user", ex));
+                    if (ex instanceof AbstractManagementException) {
+                        return Single.error(ex);
+                    } else {
+                        LOGGER.error("An error occurs while trying to create a user", ex);
+                        return Single.error(new TechnicalManagementException("An error occurs while trying to create a user", ex));
+                    }
                 });
     }
 
@@ -138,19 +162,12 @@ public class UserServiceImpl implements UserService {
         return userRepository.findById(id)
                 .switchIfEmpty(Maybe.error(new UserNotFoundException(id)))
                 .flatMapSingle(oldUser -> {
-                    if (updateUser.getPassword() != null) {
-                        oldUser.setPassword(passwordEncoder.encode(updateUser.getPassword()));
-                    }
+                    oldUser.setExternalId(updateUser.getExternalId());
                     oldUser.setFirstName(updateUser.getFirstName());
                     oldUser.setLastName(updateUser.getLastName());
                     oldUser.setEmail(updateUser.getEmail());
-                    oldUser.setSource(updateUser.getSource());
-                    oldUser.setClient(updateUser.getClient());
-                    oldUser.setLoggedAt(updateUser.getLoggedAt());
-                    oldUser.setLoginsCount(updateUser.getLoginsCount());
                     oldUser.setUpdatedAt(new Date());
                     oldUser.setAdditionalInformation(updateUser.getAdditionalInformation());
-
                     return userRepository.update(oldUser);
                 })
                 .onErrorResumeNext(ex -> {

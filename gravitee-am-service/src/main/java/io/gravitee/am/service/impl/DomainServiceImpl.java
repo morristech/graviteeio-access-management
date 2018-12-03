@@ -20,14 +20,12 @@ import io.gravitee.am.model.common.event.Action;
 import io.gravitee.am.model.common.event.Event;
 import io.gravitee.am.model.common.event.Payload;
 import io.gravitee.am.model.common.event.Type;
-import io.gravitee.am.model.login.LoginForm;
 import io.gravitee.am.repository.management.api.DomainRepository;
 import io.gravitee.am.service.*;
 import io.gravitee.am.service.exception.*;
 import io.gravitee.am.service.model.NewDomain;
 import io.gravitee.am.service.model.NewSystemScope;
 import io.gravitee.am.service.model.UpdateDomain;
-import io.gravitee.am.service.model.UpdateLoginForm;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
 import io.reactivex.Observable;
@@ -75,6 +73,9 @@ public class DomainServiceImpl implements DomainService {
 
     @Autowired
     private ScopeService scopeService;
+
+    @Autowired
+    private GroupService groupService;
 
     @Override
     public Maybe<Domain> findById(String id) {
@@ -159,8 +160,8 @@ public class DomainServiceImpl implements DomainService {
                     domain.setMaster(oldDomain.isMaster());
                     domain.setCreatedAt(oldDomain.getCreatedAt());
                     domain.setUpdatedAt(new Date());
-                    domain.setLoginForm(oldDomain.getLoginForm());
                     domain.setLastEvent(new Event(Type.DOMAIN, new Payload(domainId, domainId, Action.UPDATE)));
+                    domain.setScim(updateDomain.getScim());
 
                     return domainRepository.update(domain);
                 })
@@ -201,19 +202,9 @@ public class DomainServiceImpl implements DomainService {
         return domainRepository.findById(domainId)
                 .switchIfEmpty(Maybe.error(new DomainNotFoundException(domainId)))
                 .flatMapSingle(oldDomain -> {
-                    Domain domain = new Domain();
-                    domain.setId(domainId);
-                    domain.setPath(oldDomain.getPath());
-                    domain.setName(oldDomain.getName());
-                    domain.setDescription(oldDomain.getDescription());
-                    domain.setEnabled(oldDomain.isEnabled());
-                    domain.setMaster(isMaster);
-                    domain.setCreatedAt(oldDomain.getCreatedAt());
-                    domain.setUpdatedAt(new Date());
-                    domain.setLoginForm(oldDomain.getLoginForm());
-                    domain.setIdentities(oldDomain.getIdentities());
-                    domain.setOauth2Identities(oldDomain.getOauth2Identities());
-                    return domainRepository.update(domain);
+                    oldDomain.setMaster(isMaster);
+                    oldDomain.setUpdatedAt(new Date());
+                    return domainRepository.update(oldDomain);
                 })
                 .onErrorResumeNext(ex -> {
                     if (ex instanceof AbstractManagementException) {
@@ -271,6 +262,13 @@ public class DomainServiceImpl implements DomainService {
                                         return Completable.concat(deleteUsersCompletable);
                                     })
                             )
+                            // delete groups
+                            .andThen(groupService.findByDomain(domainId)
+                                    .flatMapCompletable(groups -> {
+                                        List<Completable> deleteGroupsCompletable = groups.stream().map(u -> groupService.delete(u.getId())).collect(Collectors.toList());
+                                        return Completable.concat(deleteGroupsCompletable);
+                                    })
+                            )
                             // delete scopes
                             .andThen(scopeService.findByDomain(domainId)
                                     .flatMapCompletable(scopes -> {
@@ -286,32 +284,6 @@ public class DomainServiceImpl implements DomainService {
 
                     LOGGER.error("An error occurs while trying to delete security domain {}", domainId, ex);
                     return Completable.error(new TechnicalManagementException("An error occurs while trying to delete security domain " + domainId, ex));
-                });
-    }
-
-    @Override
-    public Single<LoginForm> updateLoginForm(String domainId, UpdateLoginForm loginForm) {
-        LOGGER.debug("Update login form of an existing domain: {}", domainId);
-        return domainRepository.findById(domainId)
-                .switchIfEmpty(Maybe.error(new DomainNotFoundException(domainId)))
-                .flatMapSingle(domain -> {
-                    LoginForm form = new LoginForm();
-                    form.setEnabled(loginForm.isEnabled());
-                    form.setContent(loginForm.getContent());
-                    form.setAssets(loginForm.getAssets());
-
-                    domain.setLoginForm(form);
-                    domain.setUpdatedAt(new Date());
-
-                    return domainRepository.update(domain).map(domain1 -> form);
-                })
-                .onErrorResumeNext(ex -> {
-                    if (ex instanceof AbstractManagementException) {
-                        return Single.error(ex);
-                    }
-
-                    LOGGER.error("An error occurs while trying to update login form domain", ex);
-                    return Single.error(new TechnicalManagementException("An error occurs while trying to update a domain", ex));
                 });
     }
 

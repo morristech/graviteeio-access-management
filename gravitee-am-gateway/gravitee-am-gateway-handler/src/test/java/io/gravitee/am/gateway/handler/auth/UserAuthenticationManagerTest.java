@@ -95,6 +95,8 @@ public class UserAuthenticationManagerTest {
             }
         }));
 
+        when(identityProviderManager.getIdentityProvider("idp-1")).thenReturn(Maybe.empty());
+
         TestObserver<User> observer = userAuthenticationManager.authenticate(client, new Authentication() {
             @Override
             public Object getCredentials() {
@@ -191,6 +193,9 @@ public class UserAuthenticationManagerTest {
                 return Maybe.empty();
             }
         }));
+
+        when(identityProviderManager.getIdentityProvider("idp-1")).thenReturn(Maybe.empty());
+        when(identityProviderManager.getIdentityProvider("idp-2")).thenReturn(Maybe.empty());
 
         TestObserver<User> observer = userAuthenticationManager.authenticate(client, new Authentication() {
             @Override

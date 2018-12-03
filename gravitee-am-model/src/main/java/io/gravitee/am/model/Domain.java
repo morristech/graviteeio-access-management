@@ -17,6 +17,7 @@ package io.gravitee.am.model;
 
 import io.gravitee.am.model.common.event.Event;
 import io.gravitee.am.model.login.LoginForm;
+import io.gravitee.am.model.scim.SCIMSettings;
 
 import java.util.Date;
 import java.util.Set;
@@ -74,6 +75,8 @@ public class Domain {
     private Set<String> oauth2Identities;
 
     private Event lastEvent;
+
+    private SCIMSettings scim;
 
     public String getId() {
         return id;
@@ -169,6 +172,14 @@ public class Domain {
 
     public void setLastEvent(Event lastEvent) {
         this.lastEvent = lastEvent;
+    }
+
+    public SCIMSettings getScim() {
+        return scim;
+    }
+
+    public void setScim(SCIMSettings scim) {
+        this.scim = scim;
     }
 
     @Override

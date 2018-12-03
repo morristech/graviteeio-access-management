@@ -16,9 +16,9 @@
 package io.gravitee.am.gateway.handler.vertx.auth.provider;
 
 import io.gravitee.am.gateway.handler.auth.EndUserAuthentication;
+import io.gravitee.am.gateway.handler.auth.UserAuthenticationManager;
 import io.gravitee.am.gateway.handler.auth.idp.IdentityProviderManager;
 import io.gravitee.am.gateway.handler.oauth2.utils.OAuth2Constants;
-import io.gravitee.am.gateway.service.UserService;
 import io.gravitee.am.identityprovider.api.DefaultUser;
 import io.gravitee.am.service.exception.authentication.BadCredentialsException;
 import io.reactivex.Maybe;
@@ -46,14 +46,14 @@ public class OAuth2ClientAuthenticationProvider implements AuthProvider {
     private final static String PASSWORD_PARAMETER = "password";
     private static final String PROVIDER_PARAMETER = "provider";
     private IdentityProviderManager identityProviderManager;
-    private UserService userService;
+    private UserAuthenticationManager userAuthenticationManager;
 
     public OAuth2ClientAuthenticationProvider() {
     }
 
-    public OAuth2ClientAuthenticationProvider(IdentityProviderManager identityProviderManager, UserService userService) {
+    public OAuth2ClientAuthenticationProvider(IdentityProviderManager identityProviderManager, UserAuthenticationManager userAuthenticationManager) {
         this.identityProviderManager = identityProviderManager;
-        this.userService = userService;
+        this.userAuthenticationManager = userAuthenticationManager;
     }
 
     @Override
@@ -77,8 +77,8 @@ public class OAuth2ClientAuthenticationProvider implements AuthProvider {
                     Map<String, Object> additionalInformation = user.getAdditionalInformation() == null ? new HashMap<>() : new HashMap<>(user.getAdditionalInformation());
                     additionalInformation.put("source", authInfo.getString(PROVIDER_PARAMETER));
                     additionalInformation.put(OAuth2Constants.CLIENT_ID, authInfo.getString(OAuth2Constants.CLIENT_ID));
-                    ((DefaultUser) user).setAdditonalInformation(additionalInformation);
-                    return userService.findOrCreate(user);
+                    ((DefaultUser) user).setAdditionalInformation(additionalInformation);
+                    return userAuthenticationManager.loadUser(user);
                 })
                 .subscribe(user -> resultHandler.handle(Future.succeededFuture(new io.gravitee.am.gateway.handler.vertx.auth.user.User(user))), error -> {
                     logger.error("Unable to authenticate oauth2 provider", error);

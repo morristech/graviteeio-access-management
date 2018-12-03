@@ -16,12 +16,12 @@
 package io.gravitee.am.gateway.handler.oauth2.granter.extensiongrant;
 
 import io.gravitee.am.extensiongrant.api.ExtensionGrantProvider;
+import io.gravitee.am.gateway.handler.auth.UserAuthenticationManager;
 import io.gravitee.am.gateway.handler.oauth2.exception.InvalidGrantException;
 import io.gravitee.am.gateway.handler.oauth2.granter.AbstractTokenGranter;
 import io.gravitee.am.gateway.handler.oauth2.request.TokenRequest;
 import io.gravitee.am.gateway.handler.oauth2.request.TokenRequestResolver;
 import io.gravitee.am.gateway.handler.oauth2.token.TokenService;
-import io.gravitee.am.gateway.service.UserService;
 import io.gravitee.am.identityprovider.api.DefaultUser;
 import io.gravitee.am.model.Client;
 import io.gravitee.am.model.ExtensionGrant;
@@ -42,11 +42,11 @@ public class ExtensionGrantGranter extends AbstractTokenGranter {
 
     private ExtensionGrantProvider extensionGrantProvider;
     private ExtensionGrant extensionGrant;
-    private UserService userService;
+    private UserAuthenticationManager userAuthenticationManager;
 
     public ExtensionGrantGranter(ExtensionGrantProvider extensionGrantProvider,
                                  ExtensionGrant extensionGrant,
-                                 UserService userService,
+                                 UserAuthenticationManager userAuthenticationManager,
                                  TokenService tokenService,
                                  TokenRequestResolver tokenRequestResolver) {
         super(extensionGrant.getGrantType());
@@ -54,7 +54,7 @@ public class ExtensionGrantGranter extends AbstractTokenGranter {
         setTokenRequestResolver(tokenRequestResolver);
         this.extensionGrantProvider = extensionGrantProvider;
         this.extensionGrant = extensionGrant;
-        this.userService = userService;
+        this.userAuthenticationManager = userAuthenticationManager;
     }
 
     @Override
@@ -65,8 +65,8 @@ public class ExtensionGrantGranter extends AbstractTokenGranter {
                         Map<String, Object> additionalInformation = endUser.getAdditionalInformation() == null ? new HashMap<>() : new HashMap<>(endUser.getAdditionalInformation());
                         // set source provider
                         additionalInformation.put("source", extensionGrant.getIdentityProvider());
-                        ((DefaultUser) endUser).setAdditonalInformation(additionalInformation);
-                        return userService.findOrCreate(endUser).toMaybe();
+                        ((DefaultUser) endUser).setAdditionalInformation(additionalInformation);
+                        return userAuthenticationManager.loadUser(endUser).toMaybe();
                     } else {
                         User user = new User();
                         user.setUsername(endUser.getUsername());

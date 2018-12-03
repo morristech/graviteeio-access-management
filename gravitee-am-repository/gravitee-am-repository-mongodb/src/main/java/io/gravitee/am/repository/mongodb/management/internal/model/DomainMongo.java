@@ -49,6 +49,8 @@ public class DomainMongo extends Auditable {
 
     private Document lastEvent;
 
+    private SCIMSettingsMongo scim;
+
     public String getId() {
         return id;
     }
@@ -127,6 +129,14 @@ public class DomainMongo extends Auditable {
 
     public void setLastEvent(Document lastEvent) {
         this.lastEvent = lastEvent;
+    }
+
+    public SCIMSettingsMongo getScim() {
+        return scim;
+    }
+
+    public void setScim(SCIMSettingsMongo scim) {
+        this.scim = scim;
     }
 
     @Override

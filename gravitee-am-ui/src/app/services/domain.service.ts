@@ -46,24 +46,13 @@ export class DomainService {
       'path': domain.path,
       'enabled': domain.enabled,
       'identities' : domain.identities,
-      'oauth2Identities': domain.oauth2Identities
+      'oauth2Identities': domain.oauth2Identities,
+      'scim': domain.scim
     });
   }
 
   delete(id): Observable<Response> {
     return this.http.delete(this.domainsURL + id);
-  }
-
-  getLoginForm(id): Observable<Response> {
-    return this.http.get(this.domainsURL + id + '/login');
-  }
-
-  createLoginForm(id, loginForm): Observable<Response> {
-    return this.http.put(this.domainsURL + id + '/login', loginForm);
-  }
-
-  deleteLoginForm(domainId): Observable<Response> {
-    return this.http.delete(this.domainsURL + domainId + '/login');
   }
 
   notify(domain): void {
